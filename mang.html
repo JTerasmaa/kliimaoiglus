@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="et">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kliimaõigluse Liikumismäng</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --border: #334155;
+      --muted: #64748b;
+      --text: #e2e8f0;
+      --subtle: #94a3b8;
+      --blue: #3b82f6;
+      --cyan: #22d3ee;
+      --red: #ef4444;
+      --orange: #f97316;
+      --yellow: #eab308;
+      --green: #22c55e;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ===== UTILITIES ===== */
+    .hidden { display: none !important; }
+
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: 6px; padding: 9px 16px; border-radius: 8px; border: none;
+      font-size: 0.85rem; font-weight: 600; cursor: pointer;
+      transition: filter 0.15s, opacity 0.15s;
+      white-space: nowrap;
+    }
+    .btn:hover:not(:disabled) { filter: brightness(1.15); }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .btn-primary   { background: var(--blue);  color: #fff; }
+    .btn-secondary { background: var(--border); color: var(--text); }
+    .btn-amber     { background: #d97706; color: #fff; }
+    .btn-green     { background: #16a34a; color: #fff; }
+    .btn-red       { background: #991b1b; color: #fff; }
+    .btn-full      { width: 100%; }
+
+    /* ===== SETUP SCREEN ===== */
+    #setup-screen {
+      position: fixed; inset: 0; background: var(--bg); z-index: 100;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 24px 16px 40px; overflow-y: auto;
+    }
+
+    .setup-logo  { font-size: 2.2rem; margin-bottom: 6px; }
+    .setup-title { font-size: 1.6rem; font-weight: 700; color: #60a5fa; text-align: center; margin-bottom: 4px; }
+    .setup-sub   { color: var(--subtle); margin-bottom: 20px; text-align: center; font-size: 0.9rem; }
+
+    .quick-btns {
+      display: flex; gap: 8px; flex-wrap: wrap;
+      justify-content: center; margin-bottom: 12px;
+    }
+    .qbtn {
+      padding: 7px 14px; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--text); font-size: 0.8rem; font-weight: 600;
+      cursor: pointer; transition: background 0.15s, border-color 0.15s;
+    }
+    .qbtn:hover { background: var(--border); }
+
+    .sel-count { font-size: 0.8rem; color: var(--subtle); margin-bottom: 16px; }
+
+    .setup-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
+      gap: 10px; max-width: 1040px; width: 100%; margin-bottom: 24px;
+    }
+
+    .setup-card {
+      background: var(--surface); border: 2px solid var(--border);
+      border-radius: 10px; padding: 10px 12px; cursor: pointer;
+      transition: border-color 0.15s, opacity 0.15s;
+      user-select: none;
+    }
+    .setup-card:hover { border-color: var(--cyan); }
+    .setup-card.sel  { border-color: var(--cyan); background: #0c2f3f; }
+    .setup-card.off  { opacity: 0.35; }
+
+    /* Card top row: flag + title */
+    .sc-top {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+      padding-bottom: 7px; border-bottom: 1px solid var(--border);
+    }
+    .sc-flag img { width: 32px; height: auto; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,0.4); flex-shrink:0; }
+    .sc-head { display: flex; flex-direction: column; min-width:0; }
+    .sc-country { font-size: 0.82rem; font-weight: 700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .sc-name    { font-size: 0.68rem; color: var(--subtle); }
+
+    /* Card data rows */
+    .sc-rows { display: flex; flex-direction: column; gap: 3px; }
+    .sc-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-size: 0.67rem; gap: 4px;
+    }
+    .sc-lbl { color: var(--subtle); flex-shrink: 0; white-space: nowrap; }
+    .sc-val { font-weight: 600; text-align: right; white-space: nowrap; }
+    .sc-rank { font-size: 0.6rem; color: var(--muted); margin-left: 3px; }
+
+    .start-btn {
+      padding: 14px 48px; background: var(--blue); color: #fff;
+      border: none; border-radius: 12px; font-size: 1.05rem;
+      font-weight: 700; cursor: pointer; transition: filter 0.15s;
+    }
+    .start-btn:hover:not(:disabled) { filter: brightness(1.15); }
+    .start-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ===== HEADER ===== */
+    #hdr {
+      position: sticky; top: 0; z-index: 20;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px;
+      background: var(--surface); border-bottom: 1px solid var(--border);
+    }
+    .hdr-title  { font-size: 1rem; font-weight: 700; color: #60a5fa; }
+    .hdr-round  { font-size: 0.82rem; color: var(--subtle); }
+    .hdr-btns   { display: flex; gap: 6px; }
+
+    /* ===== MAIN LAYOUT ===== */
+    #game-wrap {
+      display: flex;
+      height: calc(100vh - 53px);
+    }
+
+    /* ===== TRACK PANEL ===== */
+    #track-panel {
+      flex: 1; min-width: 0;
+      overflow-y: auto;
+      padding: 12px 8px 24px 12px;
+    }
+
+    .legend {
+      display: flex; gap: 14px; flex-wrap: wrap;
+      margin-bottom: 10px; padding-left: 4px;
+    }
+    .leg { display: flex; align-items: center; gap: 5px; font-size: 0.65rem; color: var(--subtle); }
+    .leg-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    /* Scale row above bars */
+    .scale-row {
+      display: flex; align-items: flex-end;
+      margin-bottom: 6px;
+    }
+    .scale-spacer { flex-shrink: 0; } /* same width as char-label */
+    .scale-marks  { flex: 1; position: relative; height: 18px; }
+    .scale-mark {
+      position: absolute; bottom: 0;
+      transform: translateX(-50%);
+      font-size: 0.6rem; color: var(--muted);
+    }
+    .scale-tick {
+      position: absolute; bottom: 18px;
+      transform: translateX(-50%);
+      width: 1px; height: 6px; background: var(--border);
+    }
+    .scale-end { flex-shrink: 0; } /* same width as steps label */
+
+    /* Character row */
+    .char-row {
+      display: flex; align-items: center;
+      height: 32px; margin-bottom: 4px;
+    }
+
+    .char-label {
+      flex-shrink: 0;
+      display: flex; align-items: center; gap: 6px;
+      padding-right: 10px; cursor: default;
+      overflow: hidden;
+    }
+    .c-flag { flex-shrink: 0; display: flex; align-items: center; }
+    .c-flag img { width: 26px; height: auto; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+    .c-names { display: flex; flex-direction: column; min-width: 0; }
+    .c-name    { font-size: 0.72rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .c-country { font-size: 0.62rem; color: var(--subtle); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .char-track {
+      flex: 1; position: relative; height: 18px; min-width: 0;
+    }
+    .track-bg {
+      position: absolute; inset: 0;
+      background: #1a2744; border-radius: 9px;
+    }
+    /* Gridlines at 5,10,15,20 steps */
+    .gridline {
+      position: absolute; top: 0; bottom: 0;
+      width: 1px; background: rgba(100,116,139,0.3);
+      pointer-events: none;
+    }
+
+    .c-bar {
+      position: absolute; left: 0; top: 0; bottom: 0;
+      border-radius: 9px;
+      transition: width 0.8s cubic-bezier(0.4,0,0.2,1);
+      min-width: 0;
+    }
+    .t-red    .c-bar { background: linear-gradient(90deg,#9f1239,#ef4444); }
+    .t-orange .c-bar { background: linear-gradient(90deg,#9a3412,#f97316); }
+    .t-yellow .c-bar { background: linear-gradient(90deg,#92400e,#fbbf24); }
+    .t-green  .c-bar { background: linear-gradient(90deg,#14532d,#22c55e); }
+
+    .c-dot {
+      position: absolute; top: 50%;
+      width: 16px; height: 16px; border-radius: 50%;
+      border: 2px solid var(--bg);
+      transform: translate(-50%, -50%);
+      transition: left 0.8s cubic-bezier(0.4,0,0.2,1);
+      z-index: 3;
+    }
+    .t-red    .c-dot { background: #ef4444; }
+    .t-orange .c-dot { background: #f97316; }
+    .t-yellow .c-dot { background: #eab308; }
+    .t-green  .c-dot { background: #22c55e; }
+
+    .c-steps {
+      flex-shrink: 0; text-align: right;
+      font-size: 0.72rem; font-weight: 700;
+      padding-left: 8px;
+    }
+    .t-red    .c-steps { color: #f87171; }
+    .t-orange .c-steps { color: #fb923c; }
+    .t-yellow .c-steps { color: #fbbf24; }
+    .t-green  .c-steps { color: #4ade80; }
+
+    /* ===== CONTROLS PANEL ===== */
+    #ctrl-panel {
+      width: 272px; flex-shrink: 0;
+      background: var(--surface); border-left: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow-y: auto;
+    }
+    .cp-section {
+      padding: 14px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .cp-title {
+      font-size: 0.65rem; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 10px;
+    }
+
+    /* Category list */
+    .cat-item {
+      display: flex; align-items: flex-start; gap: 8px;
+      padding: 7px 8px; border-radius: 8px;
+      margin-bottom: 3px; cursor: pointer;
+      border: 1px solid transparent;
+      transition: background 0.12s;
+    }
+    .cat-item:hover { background: var(--bg); }
+    .cat-item.ci-done    { opacity: 0.55; }
+    .cat-item.ci-current { background: #1e3a5f; border-color: var(--blue); }
+    .cat-item.ci-future  { opacity: 0.6; }
+    .ci-num {
+      width: 20px; height: 20px; border-radius: 50%;
+      background: var(--border); display: flex; align-items: center;
+      justify-content: center; font-size: 0.62rem; font-weight: 700;
+      flex-shrink: 0; margin-top: 1px;
+    }
+    .cat-item.ci-done    .ci-num { background: #16a34a; color: #fff; }
+    .cat-item.ci-current .ci-num { background: var(--blue); color: #fff; }
+    .ci-text { font-size: 0.73rem; line-height: 1.35; }
+    .ci-range { font-size: 0.62rem; color: var(--muted); }
+
+    .nav-row { display: flex; gap: 8px; margin-bottom: 8px; }
+
+    /* Discussion questions */
+    .dq {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 9px 10px; margin-bottom: 6px;
+      font-size: 0.76rem; line-height: 1.4; cursor: pointer;
+      transition: border-color 0.12s;
+    }
+    .dq:hover { border-color: var(--blue); }
+    .dq-lbl { font-size: 0.6rem; font-weight: 700; color: var(--muted); margin-bottom: 3px; text-transform: uppercase; }
+
+    .finish-box {
+      background: linear-gradient(135deg,#1e3a5f,#164e63);
+      border: 1px solid #0891b2; border-radius: 8px;
+      padding: 10px 12px; font-size: 0.78rem; line-height: 1.5;
+      margin-bottom: 8px;
+    }
+
+    /* ===== PAUSE MODAL ===== */
+    #pause-modal {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.8); z-index: 50;
+      align-items: center; justify-content: center;
+    }
+    #pause-modal.open { display: flex; }
+    .pm-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 32px; max-width: 500px; width: 92%;
+      text-align: center;
+    }
+    .pm-icon  { font-size: 2.5rem; margin-bottom: 12px; }
+    .pm-title { font-size: 1.1rem; font-weight: 700; color: #fbbf24; margin-bottom: 14px; }
+    .pm-q     { font-size: 1rem; line-height: 1.6; margin-bottom: 20px; min-height: 3em; }
+    .pm-timer { font-size: 2.8rem; font-weight: 700; color: #60a5fa; margin-bottom: 22px; font-variant-numeric: tabular-nums; }
+    .pm-btns  { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+    /* ===== CHAR TOOLTIP ===== */
+    #ctip {
+      display: none; position: fixed; z-index: 60;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 14px; width: 240px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      pointer-events: none; font-size: 0.75rem;
+    }
+    #ctip.vis { display: block; }
+    .ct-head { font-weight: 700; font-size: 0.9rem; margin-bottom: 8px; }
+    .ct-row  { display: flex; justify-content: space-between; margin-bottom: 3px; }
+    .ct-lbl  { color: var(--subtle); }
+    .ct-val  { font-weight: 600; }
+    .ct-done { color: var(--muted); }
+    .ct-active { color: #60a5fa; }
+    .ct-total {
+      margin-top: 8px; padding-top: 8px;
+      border-top: 1px solid var(--border);
+      font-weight: 700;
+    }
+
+    /* ===== FOOTER INFO ===== */
+    .info-footer {
+      margin-top: 28px; padding: 14px 20px;
+      border-top: 1px solid var(--border);
+      text-align: center; max-width: 700px; width: 100%;
+    }
+    .info-footer a { color: #60a5fa; text-decoration: none; }
+    .info-footer a:hover { text-decoration: underline; }
+    .info-project { font-size: 0.78rem; color: var(--subtle); margin-bottom: 5px; }
+    .info-authors { font-size: 0.72rem; color: var(--muted); line-height: 1.5; }
+
+    /* Small footer strip in game view */
+    .game-footer-strip {
+      font-size: 0.6rem; color: #334155;
+      padding: 3px 12px; text-align: right;
+      border-top: 1px solid #1e293b;
+    }
+    .game-footer-strip a { color: #334155; text-decoration: none; }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 700px) {
+      #game-wrap { flex-direction: column; height: auto; }
+      #ctrl-panel { width: 100%; border-left: none; border-top: 1px solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ===================== SETUP SCREEN ===================== -->
+<div id="setup-screen">
+  <div class="setup-logo">🌍</div>
+  <div class="setup-title">Kliimaõigluse Liikumismäng</div>
+  <p class="setup-sub">Vali, millised rollikaardid on mängus. Klõpsa kaardil, et lülitada sisse/välja.</p>
+
+  <div class="quick-btns">
+    <button class="qbtn" onclick="selectAll()">✓ Kõik 24</button>
+    <button class="qbtn" onclick="selectExtremes()">⬡ 12 äärmust (6+6)</button>
+    <button class="qbtn" onclick="selectTop6()">▲ 6 kõrgeimat</button>
+    <button class="qbtn" onclick="selectNone()">✕ Tühjenda</button>
+  </div>
+
+  <p class="sel-count" id="sel-count">24 kaarti valitud</p>
+  <div class="setup-grid" id="setup-grid"></div>
+  <button class="start-btn" id="start-btn" onclick="startGame()">▶&nbsp; Alusta mängu</button>
+
+  <div class="info-footer">
+    <div class="info-project">
+      Mäng on koostatud projekti <strong><a href="https://kliimatarkused.ut.ee/kliima-ja-oiglus/" target="_blank">KLIIMATEADLIK</a></strong> raames
+    </div>
+    <div class="info-authors">
+      Autorid: Aet Annist (TÜ, TLÜ) &nbsp;·&nbsp; Grete Arro (TLÜ) &nbsp;·&nbsp; Jaanus Terasmaa (TLÜ) &nbsp;·&nbsp; Triinu Jesmin (TLÜ)
+    </div>
+  </div>
+</div>
+
+<!-- ===================== HEADER ===================== -->
+<div id="hdr" class="hidden">
+  <div class="hdr-title">🌍 Kliimaõigluse Liikumismäng</div>
+  <div class="hdr-round" id="hdr-round">Ring 0 / 7</div>
+  <div class="hdr-btns">
+    <button class="btn btn-secondary" onclick="toSetup()" style="font-size:0.72rem;padding:6px 10px">⚙ Kaardid</button>
+    <button class="btn btn-secondary" onclick="resetRounds()" style="font-size:0.72rem;padding:6px 10px" title="Alusta ringid uuesti">↺ Lähtesta</button>
+    <button class="btn btn-secondary" onclick="goFS()" style="font-size:0.72rem;padding:6px 10px" title="Täisekraan">⛶</button>
+  </div>
+</div>
+
+<!-- ===================== GAME WRAP ===================== -->
+<div id="game-wrap" class="hidden">
+
+  <!-- Track Panel -->
+  <div id="track-panel">
+    <div class="legend">
+      <div class="leg"><div class="leg-dot" style="background:#ef4444"></div>≥14 sammu (kõrge CO₂)</div>
+      <div class="leg"><div class="leg-dot" style="background:#f97316"></div>8–13 sammu</div>
+      <div class="leg"><div class="leg-dot" style="background:#eab308"></div>4–7 sammu</div>
+      <div class="leg"><div class="leg-dot" style="background:#22c55e"></div>&lt;4 sammu (madal CO₂)</div>
+      <div class="leg" style="margin-left:8px;color:#475569">1 samm = 1 000 kg CO₂/aastas</div>
+    </div>
+    <div id="scale-row" class="scale-row">
+      <div class="scale-spacer" id="scale-spacer"></div>
+      <div class="scale-marks" id="scale-marks"></div>
+      <div class="scale-end"  id="scale-end"></div>
+    </div>
+    <div id="char-rows"></div>
+  </div>
+
+  <!-- Controls Panel -->
+  <div id="ctrl-panel">
+
+    <div class="cp-section">
+      <div class="cp-title">Tegevuste ringid</div>
+      <div id="cat-list"></div>
+    </div>
+
+    <div class="cp-section">
+      <div class="cp-title">Juhtimine</div>
+      <div class="nav-row">
+        <button class="btn btn-secondary" id="btn-prev" onclick="prevRound()" style="flex:1">◀ Eelmine</button>
+        <button class="btn btn-primary"   id="btn-next" onclick="nextRound()" style="flex:1">Järgmine ▶</button>
+      </div>
+      <button class="btn btn-amber btn-full" id="btn-pause" onclick="openPause()">⏸&nbsp; Paus — mõtlemisaeg</button>
+    </div>
+
+    <div class="cp-section" id="dq-section">
+      <div class="cp-title">Arutelukysimused</div>
+      <div id="dq-list"></div>
+    </div>
+
+    <div style="padding:12px 14px; margin-top:auto; border-top:1px solid var(--border)">
+      <div style="font-size:0.62rem; color:#334155; line-height:1.6">
+        Projekt <a href="https://kliimatarkused.ut.ee/kliima-ja-oiglus/" target="_blank"
+          style="color:#475569;text-decoration:none">KLIIMATEADLIK</a><br>
+        Annist · Arro · Terasmaa · Jesmin<br>
+        TÜ / TLÜ
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===================== PAUSE MODAL ===================== -->
+<div id="pause-modal">
+  <div class="pm-card">
+    <div class="pm-icon">🤔</div>
+    <div class="pm-title">Mõtlemisaeg</div>
+    <div class="pm-q" id="pm-q">Mõtelge enda jaoks: mida need vahed võiksid tähendada?</div>
+    <div class="pm-timer" id="pm-timer">1:00</div>
+    <div class="pm-btns">
+      <button class="btn btn-green" onclick="closePause()">▶&nbsp; Jätka mängu</button>
+      <button class="btn btn-secondary" onclick="resetTimer()">↺&nbsp; Taasta (1 min)</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== CHAR TOOLTIP ===================== -->
+<div id="ctip">
+  <div class="ct-head" id="ct-head"></div>
+  <div id="ct-rows"></div>
+  <div class="ct-total" id="ct-total"></div>
+</div>
+
+<script>
+/* ============================================================
+   DATA
+   ============================================================ */
+
+const CATS = [
+  { short: "Igapäevane transport",    full: "Igapäevane transport (kooli/tööle jms)" },
+  { short: "Muu transport / turism",  full: "Muu transport (sh turism)" },
+  { short: "Lihatoit",                full: "Lihatoit" },
+  { short: "Taimne toit",             full: "Taimne toit" },
+  { short: "Riigi infrastruktuur",    full: "Riigi infrastruktuur (arstiabi, sotsiaallkaitse, turvalisus jms)" },
+  { short: "Asjade ostmine",          full: "Asjade ostmine" },
+  { short: "Vee ja kütte tarbimine",  full: "Vee ja kütte tarbimine kodus" },
+];
+
+// d: { co2r: total Mt CO2/yr, rr: rank in total, co2i: kg/person/yr, ri: rank per-capita, rh: vulnerability rank /191 }
+// Per-capita values match exactly the card steps (1 step = 1000 kg).
+// Total emissions, ranks and vulnerability from IEA / Global Carbon Project / ND-GAIN ~2021-2022.
+const CHARS = [
+  { id: 0,  riik:"Austraalia",         nimi:"Ash",          v:16, cc:"au", s:[4,   5,    3,    1,    2,    4,    3   ], tot:22,   d:{co2r:"396 Mt",  rr:16,  co2i:"22 000 kg", ri:7,   rh:132} },
+  { id: 1,  riik:"USA",                nimi:"Hannah",       v:16, cc:"us", s:[4,   3,    3,    1,    1,    4.5,  3.5 ], tot:20,   d:{co2r:"4 713 Mt",rr:2,   co2i:"20 000 kg", ri:11,  rh:142} },
+  { id: 2,  riik:"Kanada",             nimi:"Cynthia",      v:15, cc:"ca", s:[2,   2,    2,    2,    2.5,  4,    3.5 ], tot:18,   d:{co2r:"566 Mt",  rr:10,  co2i:"18 000 kg", ri:13,  rh:148} },
+  { id: 3,  riik:"Venemaa",            nimi:"Juri",         v:16, cc:"ru", s:[2,   2,    2.5,  2,    2.5,  3,    4   ], tot:18,   d:{co2r:"1 577 Mt",rr:4,   co2i:"18 000 kg", ri:14,  rh:110} },
+  { id: 4,  riik:"Lõuna-Korea",        nimi:"Ha-Joon",      v:16, cc:"kr", s:[1,   2,    1,    1,    2,    3.5,  3.5 ], tot:14,   d:{co2r:"611 Mt",  rr:9,   co2i:"14 000 kg", ri:22,  rh:108} },
+  { id: 5,  riik:"Tšehhi Vabariik",   nimi:"Dominika",     v:15, cc:"cz", s:[1,   1,    2,    1,    2,    2.5,  2.5 ], tot:12,   d:{co2r:"100 Mt",  rr:34,  co2i:"12 000 kg", ri:30,  rh:130} },
+  { id: 6,  riik:"Hiina",              nimi:"Liang",        v:14, cc:"cn", s:[1,   1.5,  1.5,  1,    2,    2,    2   ], tot:11,   d:{co2r:"11 472 Mt",rr:1,  co2i:"11 000 kg", ri:47,  rh:85}  },
+  { id: 7,  riik:"Iraan",              nimi:"Adrin",        v:14, cc:"ir", s:[1,   0.5,  1.5,  1,    2.5,  2.5,  2   ], tot:11,   d:{co2r:"724 Mt",  rr:8,   co2i:"11 000 kg", ri:38,  rh:90}  },
+  { id: 8,  riik:"Eesti",              nimi:"Elis",         v:15, cc:"ee", s:[1.5, 1.5,  2,    0.5,  1.5,  2,    1.5 ], tot:10.5, d:{co2r:"14 Mt",   rr:80,  co2i:"10 500 kg", ri:33,  rh:122} },
+  { id: 9,  riik:"Bulgaaria",          nimi:"Chrystalina",  v:16, cc:"bg", s:[1.5, 1.5,  1.5,  1,    1.5,  2,    1   ], tot:10,   d:{co2r:"36 Mt",   rr:56,  co2i:"10 000 kg", ri:45,  rh:96}  },
+  { id:10,  riik:"Austria",            nimi:"Hans",         v:13, cc:"at", s:[1,   1.5,  1,    1,    1.5,  1.5,  1   ], tot:8.5,  d:{co2r:"62 Mt",   rr:43,  co2i:"8 500 kg",  ri:50,  rh:138} },
+  { id:11,  riik:"Itaalia",            nimi:"Lucia",        v:15, cc:"it", s:[1,   1,    0.5,  1,    1.5,  1.5,  0.5 ], tot:7,    d:{co2r:"330 Mt",  rr:18,  co2i:"7 000 kg",  ri:60,  rh:105} },
+  { id:12,  riik:"Taimaa",             nimi:"Chailai",      v:15, cc:"th", s:[1,   0.75, 0.5,  1,    1.5,  1.5,  0.25], tot:6.5,  d:{co2r:"270 Mt",  rr:21,  co2i:"6 500 kg",  ri:66,  rh:72}  },
+  { id:13,  riik:"Kolumbia",           nimi:"Pedro",        v:13, cc:"co", s:[0.25,0.25, 0.5,  0.5,  0.75, 1.25, 0.5 ], tot:4,    d:{co2r:"76 Mt",   rr:38,  co2i:"4 000 kg",  ri:92,  rh:65}  },
+  { id:14,  riik:"Kõrgõstan",          nimi:"Gulmira",      v:13, cc:"kg", s:[0.25,0.25, 0.75, 0.5,  1,    0.5,  0.25], tot:3.5,  d:{co2r:"12 Mt",   rr:85,  co2i:"3 500 kg",  ri:100, rh:62}  },
+  { id:15,  riik:"Peruu",              nimi:"Maria",        v:13, cc:"pe", s:[0.25,0.25, 0.75, 0.25, 0.75, 0.5,  0.25], tot:3,    d:{co2r:"55 Mt",   rr:47,  co2i:"3 000 kg",  ri:110, rh:55}  },
+  { id:16,  riik:"Sri Lanka",          nimi:"Manil",        v:14, cc:"lk", s:[0,   0,    0.25, 0.5,  0.25, 0.75, 0.25], tot:2,    d:{co2r:"24 Mt",   rr:68,  co2i:"2 000 kg",  ri:134, rh:45}  },
+  { id:17,  riik:"Keenia",             nimi:"Jacob",        v:14, cc:"ke", s:[0,   0,    0.5,  0.25, 0.25, 1,    0   ], tot:2,    d:{co2r:"20 Mt",   rr:72,  co2i:"2 000 kg",  ri:138, rh:20}  },
+  { id:18,  riik:"Somaalia",           nimi:"Hassan",       v:16, cc:"so", s:[0,   0,    0.5,  0.5,  0.25, 0.75, 0   ], tot:2,    d:{co2r:"3 Mt",    rr:135, co2i:"2 000 kg",  ri:140, rh:5}   },
+  { id:19,  riik:"Zimbabwe",           nimi:"Mwoyo",        v:14, cc:"zw", s:[0,   0,    0.5,  0.25, 0,    0.5,  0.25], tot:1.5,  d:{co2r:"12 Mt",   rr:84,  co2i:"1 500 kg",  ri:158, rh:15}  },
+  { id:20,  riik:"Tansaania",          nimi:"Aadila",       v:13, cc:"tz", s:[0,   0,    0.5,  0.25, 0,    0.5,  0.25], tot:1.5,  d:{co2r:"14 Mt",   rr:81,  co2i:"1 500 kg",  ri:155, rh:12}  },
+  { id:21,  riik:"Haiti",              nimi:"Boulou",       v:14, cc:"ht", s:[0,   0,    0.5,  0.25, 0.25, 0.5,  0   ], tot:1.5,  d:{co2r:"4 Mt",    rr:124, co2i:"1 500 kg",  ri:162, rh:8}   },
+  { id:22,  riik:"Paapua Uus Guinea",  nimi:"Junior",       v:16, cc:"pg", s:[0,   0,    0.5,  0.25, 0,    0.25, 0   ], tot:1,    d:{co2r:"8 Mt",    rr:100, co2i:"1 000 kg",  ri:168, rh:28}  },
+  { id:23,  riik:"Malawi",             nimi:"Martha",       v:13, cc:"mw", s:[0,   0,    0.5,  0.25, 0,    0.25, 0   ], tot:1,    d:{co2r:"4 Mt",    rr:122, co2i:"1 000 kg",  ri:172, rh:3}   },
+];
+
+const MAX_S = 22;
+
+const PAUSE_QS = [
+  "Mõtelge enda jaoks: mida need teie vahel tekkivad vahed võiksid tähendada?",
+  "Vaadake ringi. Millised riigid on lähestikku? Miks nad võiksid koos olla?",
+];
+
+const DISCUSS_QS = [
+  { lbl:"Küsimus 1", q:"Mis mõtteid teil tekkisid?" },
+  { lbl:"Küsimus 2", q:"Miks olete üksteisest nii erinevatel kaugusel?" },
+  { lbl:"Küsimus 3", q:"Mis juhtuks, kui kõik riigid tekitaks sama palju CO₂ kui USA (Hannah — 20 000 kg/aastas)?" },
+  { lbl:"Küsimus 4", q:"Millised riigid on eespool? Mida on neil ühist?" },
+  { lbl:"Küsimus 5", q:"Millised riigid on kliimamuutusest kõige rohkem ohustatud?" },
+];
+
+/* ============================================================
+   STATE
+   ============================================================ */
+
+const ST = {
+  sel:      new Set(CHARS.map(c => c.id)),
+  round:    0,
+  phase:    "setup",   // setup | play | finished
+  pqIdx:    0,
+  timerVal: 60,
+  timerTick: null,
+};
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+
+function tier(tot) {
+  if (tot >= 14) return "red";
+  if (tot >=  8) return "orange";
+  if (tot >=  4) return "yellow";
+  return "green";
+}
+
+function pos(ch) {
+  return ch.s.slice(0, ST.round).reduce((a, b) => a + b, 0);
+}
+
+function pct(steps) {
+  return (steps / MAX_S) * 100;
+}
+
+function activeChars() {
+  return CHARS.filter(c => ST.sel.has(c.id));
+}
+
+/* ============================================================
+   SETUP
+   ============================================================ */
+
+function renderSetup() {
+  const grid = document.getElementById("setup-grid");
+  grid.innerHTML = "";
+  CHARS.forEach(c => {
+    const active = ST.sel.has(c.id);
+    const div = document.createElement("div");
+    div.className = `setup-card t-${tier(c.tot)} ${active ? "sel" : "off"}`;
+    div.onclick = () => toggleCard(c.id);
+    div.innerHTML = `
+      <div class="sc-top">
+        <img class="sc-flag" src="https://flagcdn.com/w40/${c.cc}.png" alt="${c.riik}" style="width:32px;border-radius:2px;box-shadow:0 1px 3px rgba(0,0,0,.4);flex-shrink:0">
+        <div class="sc-head">
+          <span class="sc-country">${c.riik}</span>
+          <span class="sc-name">${c.nimi}, ${c.v} a.</span>
+        </div>
+      </div>
+      <div class="sc-rows">
+        <div class="sc-row">
+          <span class="sc-lbl">CO₂ riigi kohta/a:</span>
+          <span class="sc-val">${c.d.co2r} <span class="sc-rank">(${c.d.rr}.)</span></span>
+        </div>
+        <div class="sc-row">
+          <span class="sc-lbl">CO₂ inimese kohta/a:</span>
+          <span class="sc-val">${c.d.co2i} <span class="sc-rank">(${c.d.ri}.)</span></span>
+        </div>
+        <div class="sc-row">
+          <span class="sc-lbl">Haavatavus:</span>
+          <span class="sc-val"><span class="sc-rank">${c.d.rh}. koht</span></span>
+        </div>
+      </div>`;
+    grid.appendChild(div);
+  });
+  document.getElementById("sel-count").textContent = `${ST.sel.size} kaarti valitud`;
+  document.getElementById("start-btn").disabled = ST.sel.size < 2;
+}
+
+function toggleCard(id) {
+  if (ST.sel.has(id)) { if (ST.sel.size > 2) ST.sel.delete(id); }
+  else ST.sel.add(id);
+  renderSetup();
+}
+
+function selectAll()     { CHARS.forEach(c => ST.sel.add(c.id)); renderSetup(); }
+function selectNone()    { ST.sel.clear(); ST.sel.add(0); ST.sel.add(23); renderSetup(); }
+function selectTop6()    { ST.sel.clear(); CHARS.slice(0,6).forEach(c=>ST.sel.add(c.id)); renderSetup(); }
+function selectExtremes(){ ST.sel.clear(); CHARS.slice(0,6).forEach(c=>ST.sel.add(c.id)); CHARS.slice(-6).forEach(c=>ST.sel.add(c.id)); renderSetup(); }
+
+/* ============================================================
+   GAME START / RESET
+   ============================================================ */
+
+function startGame() {
+  ST.round = 0;
+  ST.phase = "play";
+  document.getElementById("setup-screen").classList.add("hidden");
+  document.getElementById("hdr").classList.remove("hidden");
+  document.getElementById("game-wrap").classList.remove("hidden");
+  buildTrack();
+  renderAll();
+}
+
+function toSetup() {
+  closePause();
+  document.getElementById("setup-screen").classList.remove("hidden");
+  document.getElementById("hdr").classList.add("hidden");
+  document.getElementById("game-wrap").classList.add("hidden");
+}
+
+function resetRounds() {
+  ST.round = 0;
+  ST.phase = "play";
+  updatePositions();
+  renderAll();
+}
+
+/* ============================================================
+   TRACK BUILD (once per game start)
+   ============================================================ */
+
+const LABEL_W = 190;  // px — char label width
+const STEPS_W = 54;   // px — step count width
+
+function buildTrack() {
+  // Scale spacer widths
+  document.getElementById("scale-spacer").style.width = LABEL_W + "px";
+  document.getElementById("scale-end").style.width    = STEPS_W + "px";
+
+  // Scale marks
+  const marks = document.getElementById("scale-marks");
+  marks.innerHTML = "";
+  [0, 5, 10, 15, 20, 22].forEach(v => {
+    const p = pct(v);
+    const tick = document.createElement("div");
+    tick.className = "scale-tick"; tick.style.left = p + "%";
+    marks.appendChild(tick);
+    const lbl = document.createElement("div");
+    lbl.className = "scale-mark"; lbl.style.left = p + "%";
+    lbl.textContent = v;
+    marks.appendChild(lbl);
+  });
+
+  // Character rows (sorted by total desc, fixed order)
+  const rows = document.getElementById("char-rows");
+  rows.innerHTML = "";
+  const sorted = [...activeChars()].sort((a, b) => b.tot - a.tot);
+
+  sorted.forEach(ch => {
+    const t = tier(ch.tot);
+    const row = document.createElement("div");
+    row.className = `char-row t-${t}`;
+    row.id = `row-${ch.id}`;
+
+    // Gridlines at 5,10,15,20
+    const glinesHTML = [5,10,15,20].map(v =>
+      `<div class="gridline" style="left:${pct(v)}%"></div>`
+    ).join("");
+
+    row.innerHTML = `
+      <div class="char-label" style="width:${LABEL_W}px"
+           onmouseenter="showTip(event,${ch.id})" onmouseleave="hideTip()">
+        <span class="c-flag"><img src="https://flagcdn.com/w40/${ch.cc}.png" alt="${ch.riik}"></span>
+        <div class="c-names">
+          <span class="c-name">${ch.nimi}</span>
+          <span class="c-country">${ch.riik}</span>
+        </div>
+      </div>
+      <div class="char-track">
+        <div class="track-bg">${glinesHTML}</div>
+        <div class="c-bar" id="bar-${ch.id}" style="width:0%"></div>
+        <div class="c-dot" id="dot-${ch.id}" style="left:0.5%"></div>
+      </div>
+      <div class="c-steps" style="width:${STEPS_W}px" id="stp-${ch.id}">0</div>
+    `;
+    rows.appendChild(row);
+  });
+}
+
+/* ============================================================
+   RENDER (header, categories, discussion)
+   ============================================================ */
+
+function renderAll() {
+  renderHeader();
+  renderCats();
+  renderDQ();
+  updateNav();
+  updatePositions();
+}
+
+function renderHeader() {
+  const el = document.getElementById("hdr-round");
+  if (ST.round === 0) el.textContent = "Algus — kõik lähtejoonel";
+  else if (ST.round >= 7) el.textContent = "Ring 7/7 — mäng lõpetatud ✓";
+  else el.textContent = `Ring ${ST.round}/7 — ${CATS[ST.round-1].short}`;
+}
+
+function renderCats() {
+  const list = document.getElementById("cat-list");
+  list.innerHTML = "";
+  CATS.forEach((cat, i) => {
+    const rn = i + 1;
+    let cls = "ci-future";
+    if (rn <  ST.round) cls = "ci-done";
+    if (rn === ST.round) cls = "ci-current";
+    const icon = rn < ST.round ? "✓" : rn;
+    const li = document.createElement("div");
+    li.className = `cat-item ${cls}`;
+    li.title = cat.full;
+    li.onclick = () => jumpTo(rn);
+    li.innerHTML = `<div class="ci-num">${icon}</div>
+      <div><div class="ci-text">${cat.short}</div></div>`;
+    list.appendChild(li);
+  });
+}
+
+function renderDQ() {
+  const sec = document.getElementById("dq-list");
+  sec.innerHTML = "";
+  const finished = ST.round >= 7;
+  if (finished) {
+    sec.innerHTML = `<div class="finish-box">🏁 <strong>Mäng lõpetatud!</strong><br>
+      Alusta arutelu allpool olevate küsimustega.</div>`;
+  }
+  DISCUSS_QS.forEach(d => {
+    const div = document.createElement("div");
+    div.className = "dq";
+    div.onclick = () => openWithQ(d.q);
+    div.innerHTML = `<div class="dq-lbl">${d.lbl}</div>${d.q}`;
+    sec.appendChild(div);
+  });
+}
+
+function updateNav() {
+  document.getElementById("btn-prev").disabled = ST.round === 0;
+  document.getElementById("btn-next").disabled = ST.round >= 7;
+  document.getElementById("btn-pause").disabled = ST.round === 0;
+}
+
+/* ============================================================
+   POSITIONS
+   ============================================================ */
+
+function updatePositions() {
+  activeChars().forEach(ch => {
+    const p = pos(ch);
+    const pctV = pct(p);
+    const bar = document.getElementById(`bar-${ch.id}`);
+    const dot = document.getElementById(`dot-${ch.id}`);
+    const stp = document.getElementById(`stp-${ch.id}`);
+    if (bar) bar.style.width = pctV + "%";
+    if (dot) dot.style.left  = Math.max(pctV, 0.4) + "%";
+    if (stp) stp.textContent = p;
+  });
+}
+
+/* ============================================================
+   NAVIGATION
+   ============================================================ */
+
+function nextRound() {
+  if (ST.round >= 7) return;
+  ST.round++;
+  if (ST.round >= 7) ST.phase = "finished";
+  renderAll();
+}
+
+function prevRound() {
+  if (ST.round <= 0) return;
+  ST.round--;
+  ST.phase = "play";
+  renderAll();
+}
+
+function jumpTo(rn) {
+  ST.round = Math.min(7, Math.max(0, rn));
+  ST.phase = ST.round >= 7 ? "finished" : "play";
+  renderAll();
+}
+
+/* ============================================================
+   PAUSE / TIMER
+   ============================================================ */
+
+function openPause() {
+  const q = PAUSE_QS[ST.pqIdx % PAUSE_QS.length];
+  ST.pqIdx++;
+  _openModal(q, 60);
+}
+
+function openWithQ(q) {
+  _openModal(q, 120);
+}
+
+function _openModal(q, secs) {
+  document.getElementById("pm-q").textContent = q;
+  document.getElementById("pause-modal").classList.add("open");
+  startTimer(secs);
+}
+
+function closePause() {
+  document.getElementById("pause-modal").classList.remove("open");
+  clearInterval(ST.timerTick);
+  ST.timerTick = null;
+}
+
+function startTimer(secs) {
+  clearInterval(ST.timerTick);
+  ST.timerVal = secs;
+  _drawTimer();
+  ST.timerTick = setInterval(() => {
+    ST.timerVal = Math.max(0, ST.timerVal - 1);
+    _drawTimer();
+    if (ST.timerVal === 0) clearInterval(ST.timerTick);
+  }, 1000);
+}
+
+function resetTimer() { startTimer(60); }
+
+function _drawTimer() {
+  const m = Math.floor(ST.timerVal / 60);
+  const s = ST.timerVal % 60;
+  const el = document.getElementById("pm-timer");
+  el.textContent = `${m}:${String(s).padStart(2,"0")}`;
+  el.style.color = ST.timerVal <= 10 ? "#f87171" : "#60a5fa";
+}
+
+/* ============================================================
+   CHAR TOOLTIP
+   ============================================================ */
+
+function showTip(e, id) {
+  const ch = CHARS.find(c => c.id === id);
+  if (!ch) return;
+  const tip = document.getElementById("ctip");
+  document.getElementById("ct-head").innerHTML = `<img src="https://flagcdn.com/w20/${ch.cc}.png" style="vertical-align:middle;border-radius:2px;margin-right:6px"> ${ch.nimi} (${ch.v}) — ${ch.riik}`;
+
+  const rows = document.getElementById("ct-rows");
+  rows.innerHTML = "";
+  CATS.forEach((cat, i) => {
+    const done = i < ST.round;
+    const div = document.createElement("div");
+    div.className = "ct-row";
+    div.innerHTML = `<span class="ct-lbl">${done?"✓":"○"} ${cat.short}</span>
+      <span class="ct-val ${done?"ct-active":"ct-done"}">${ch.s[i]} sam</span>`;
+    rows.appendChild(div);
+  });
+
+  const cur = pos(ch);
+  document.getElementById("ct-total").innerHTML =
+    `Praegu: <strong>${cur}</strong> sammu &nbsp;·&nbsp; ${(cur*1000).toLocaleString("et")} kg CO₂` +
+    `<br><span style="color:var(--muted);font-size:0.65rem">Lõpptulemus: ${ch.tot} sammu</span>`;
+
+  tip.classList.add("vis");
+  const bnd = e.currentTarget.getBoundingClientRect();
+  let lft = bnd.right + 8;
+  if (lft + 248 > innerWidth) lft = bnd.left - 256;
+  tip.style.left = lft + "px";
+  tip.style.top  = Math.min(bnd.top, innerHeight - 280) + "px";
+}
+
+function hideTip() { document.getElementById("ctip").classList.remove("vis"); }
+
+/* ============================================================
+   UTILITIES
+   ============================================================ */
+
+function goFS() {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+
+renderSetup();
+</script>
+</body>
+</html>
