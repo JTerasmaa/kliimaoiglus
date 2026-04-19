@@ -266,28 +266,41 @@
       margin-bottom: 10px;
     }
 
-    /* Category list */
+    /* Category list — toggle style */
     .cat-item {
-      display: flex; align-items: flex-start; gap: 8px;
+      display: flex; align-items: center; gap: 8px;
       padding: 7px 8px; border-radius: 8px;
       margin-bottom: 3px; cursor: pointer;
       border: 1px solid transparent;
-      transition: background 0.12s;
+      transition: background 0.12s, opacity 0.12s;
+      user-select: none;
     }
     .cat-item:hover { background: var(--bg); }
-    .cat-item.ci-done    { opacity: 0.55; }
-    .cat-item.ci-current { background: #1e3a5f; border-color: var(--blue); }
-    .cat-item.ci-future  { opacity: 0.6; }
-    .ci-num {
-      width: 20px; height: 20px; border-radius: 50%;
-      background: var(--border); display: flex; align-items: center;
-      justify-content: center; font-size: 0.62rem; font-weight: 700;
-      flex-shrink: 0; margin-top: 1px;
+    .cat-item.ci-off { opacity: 0.45; }
+    .cat-item.ci-on  { background: #0c2a1a; border-color: #166534; }
+
+    /* Toggle pill */
+    .ci-toggle {
+      flex-shrink: 0;
+      width: 30px; height: 17px; border-radius: 9px;
+      background: var(--border); position: relative;
+      transition: background 0.2s;
     }
-    .cat-item.ci-done    .ci-num { background: #16a34a; color: #fff; }
-    .cat-item.ci-current .ci-num { background: var(--blue); color: #fff; }
-    .ci-text { font-size: 0.73rem; line-height: 1.35; }
-    .ci-range { font-size: 0.62rem; color: var(--muted); }
+    .ci-toggle::after {
+      content: ''; position: absolute;
+      top: 2.5px; left: 2.5px;
+      width: 12px; height: 12px; border-radius: 50%;
+      background: #94a3b8; transition: left 0.2s, background 0.2s;
+    }
+    .cat-item.ci-on .ci-toggle { background: #16a34a; }
+    .cat-item.ci-on .ci-toggle::after { left: 15.5px; background: #fff; }
+
+    .ci-num {
+      width: 18px; flex-shrink: 0;
+      font-size: 0.62rem; font-weight: 700;
+      color: var(--muted); text-align: right;
+    }
+    .ci-text { font-size: 0.73rem; line-height: 1.35; flex: 1; min-width: 0; }
 
     .nav-row { display: flex; gap: 8px; margin-bottom: 8px; }
 
@@ -503,9 +516,6 @@ const CATS = [
   { short: "Vee ja kütte tarbimine",  full: "Vee ja kütte tarbimine kodus" },
 ];
 
-// d: { co2r: total Mt CO2/yr, rr: rank in total, co2i: kg/person/yr, ri: rank per-capita, rh: vulnerability rank /191 }
-// Per-capita values match exactly the card steps (1 step = 1000 kg).
-// Total emissions, ranks and vulnerability from IEA / Global Carbon Project / ND-GAIN ~2021-2022.
 const CHARS = [
   { id: 0,  riik:"Austraalia",         nimi:"Ash",          v:16, cc:"au", s:[4,   5,    3,    1,    2,    4,    3   ], tot:22,   d:{co2r:"396 Mt",  rr:16,  co2i:"22 000 kg", ri:7,   rh:132} },
   { id: 1,  riik:"USA",                nimi:"Hannah",       v:16, cc:"us", s:[4,   3,    3,    1,    1,    4.5,  3.5 ], tot:20,   d:{co2r:"4 713 Mt",rr:2,   co2i:"20 000 kg", ri:11,  rh:142} },
@@ -554,15 +564,15 @@ const DISCUSS_QS = [
 
 const ST = {
   sel:        new Set(CHARS.map(c => c.id)),
-  round:      0,
-  phase:      "setup",   // setup | play | finished
+  activeCats: new Set(),
+  phase:      "setup",
   pqIdx:      0,
   timerVal:   60,
   timerTick:  null,
-  startOrder: [],        // random initial order (ids), used as tiebreaker
+  startOrder: [],
 };
 
-const ROW_H = 36; // px per row (height 32 + gap 4)
+const ROW_H = 36;
 
 function shuffle(arr) {
   const a = [...arr];
@@ -585,7 +595,7 @@ function tier(tot) {
 }
 
 function pos(ch) {
-  return ch.s.slice(0, ST.round).reduce((a, b) => a + b, 0);
+  return ch.s.reduce((sum, steps, i) => ST.activeCats.has(i) ? sum + steps : sum, 0);
 }
 
 function pct(steps) {
@@ -652,9 +662,8 @@ function selectExtremes(){ ST.sel.clear(); CHARS.slice(0,6).forEach(c=>ST.sel.ad
    ============================================================ */
 
 function startGame() {
-  ST.round = 0;
+  ST.activeCats = new Set();
   ST.phase = "play";
-  // Store random initial order as tiebreaker for equal scores
   ST.startOrder = shuffle(activeChars().map(c => c.id));
   document.getElementById("setup-screen").classList.add("hidden");
   document.getElementById("hdr").classList.remove("hidden");
@@ -671,9 +680,8 @@ function toSetup() {
 }
 
 function resetRounds() {
-  ST.round = 0;
+  ST.activeCats = new Set();
   ST.phase = "play";
-  updatePositions();
   renderAll();
 }
 
@@ -681,15 +689,13 @@ function resetRounds() {
    TRACK BUILD (once per game start)
    ============================================================ */
 
-const LABEL_W = 190;  // px — char label width
-const STEPS_W = 54;   // px — step count width
+const LABEL_W = 190;
+const STEPS_W = 54;
 
 function buildTrack() {
-  // Scale spacer widths
   document.getElementById("scale-spacer").style.width = LABEL_W + "px";
   document.getElementById("scale-end").style.width    = STEPS_W + "px";
 
-  // Scale marks
   const marks = document.getElementById("scale-marks");
   marks.innerHTML = "";
   [0, 5, 10, 15, 20, 22].forEach(v => {
@@ -703,13 +709,11 @@ function buildTrack() {
     marks.appendChild(lbl);
   });
 
-  // Character rows — in random starting order (ST.startOrder)
   const container = document.getElementById("char-rows");
   container.innerHTML = "";
   const chars = activeChars();
   container.style.height = (chars.length * ROW_H) + "px";
 
-  // Create rows in random order (startOrder)
   const ordered = ST.startOrder.map(id => chars.find(c => c.id === id)).filter(Boolean);
 
   ordered.forEach((ch, i) => {
@@ -745,7 +749,7 @@ function buildTrack() {
 }
 
 /* ============================================================
-   RENDER (header, categories, discussion)
+   RENDER
    ============================================================ */
 
 function renderAll() {
@@ -758,26 +762,25 @@ function renderAll() {
 
 function renderHeader() {
   const el = document.getElementById("hdr-round");
-  if (ST.round === 0) el.textContent = "Algus — kõik lähtejoonel";
-  else if (ST.round >= 7) el.textContent = "Ring 7/7 — mäng lõpetatud ✓";
-  else el.textContent = `Ring ${ST.round}/7 — ${CATS[ST.round-1].short}`;
+  const n = ST.activeCats.size;
+  if (n === 0) el.textContent = "Algus — kõik lähtejoonel";
+  else if (n >= 7) el.textContent = "Kõik 7 kategooriat aktiivsed ✓";
+  else el.textContent = `${n}/7 kategooriat aktiivne`;
 }
 
 function renderCats() {
   const list = document.getElementById("cat-list");
   list.innerHTML = "";
   CATS.forEach((cat, i) => {
-    const rn = i + 1;
-    let cls = "ci-future";
-    if (rn <  ST.round) cls = "ci-done";
-    if (rn === ST.round) cls = "ci-current";
-    const icon = rn < ST.round ? "✓" : rn;
+    const on = ST.activeCats.has(i);
     const li = document.createElement("div");
-    li.className = `cat-item ${cls}`;
+    li.className = `cat-item ${on ? "ci-on" : "ci-off"}`;
     li.title = cat.full;
-    li.onclick = () => jumpTo(rn);
-    li.innerHTML = `<div class="ci-num">${icon}</div>
-      <div><div class="ci-text">${cat.short}</div></div>`;
+    li.onclick = () => toggleCat(i);
+    li.innerHTML = `
+      <div class="ci-toggle"></div>
+      <div class="ci-num">${i + 1}.</div>
+      <div class="ci-text">${cat.short}</div>`;
     list.appendChild(li);
   });
 }
@@ -785,7 +788,7 @@ function renderCats() {
 function renderDQ() {
   const sec = document.getElementById("dq-list");
   sec.innerHTML = "";
-  const finished = ST.round >= 7;
+  const finished = ST.activeCats.size >= 7;
   if (finished) {
     sec.innerHTML = `<div class="finish-box">🏁 <strong>Mäng lõpetatud!</strong><br>
       Alusta arutelu allpool olevate küsimustega.</div>`;
@@ -800,9 +803,10 @@ function renderDQ() {
 }
 
 function updateNav() {
-  document.getElementById("btn-prev").disabled = ST.round === 0;
-  document.getElementById("btn-next").disabled = ST.round >= 7;
-  document.getElementById("btn-pause").disabled = ST.round === 0;
+  const n = ST.activeCats.size;
+  document.getElementById("btn-prev").disabled = n === 0;
+  document.getElementById("btn-next").disabled = n >= 7;
+  document.getElementById("btn-pause").disabled = n === 0;
 }
 
 /* ============================================================
@@ -820,13 +824,11 @@ function updatePositions() {
     if (dot) dot.style.left  = Math.max(pctV, 0.4) + "%";
     if (stp) stp.textContent = p;
   });
-  // Animate rows to new ranking order
   resortRows();
 }
 
 function resortRows() {
   const chars = activeChars();
-  // Sort by current position desc; tiebreaker = original random startOrder
   const sorted = [...chars].sort((a, b) => {
     const pa = pos(a), pb = pos(b);
     if (pb !== pa) return pb - pa;
@@ -844,23 +846,27 @@ function resortRows() {
    NAVIGATION
    ============================================================ */
 
+function toggleCat(i) {
+  if (ST.activeCats.has(i)) ST.activeCats.delete(i);
+  else ST.activeCats.add(i);
+  _afterCatChange();
+}
+
 function nextRound() {
-  if (ST.round >= 7) return;
-  ST.round++;
-  if (ST.round >= 7) ST.phase = "finished";
-  renderAll();
+  for (let i = 0; i < 7; i++) {
+    if (!ST.activeCats.has(i)) { ST.activeCats.add(i); break; }
+  }
+  _afterCatChange();
 }
 
 function prevRound() {
-  if (ST.round <= 0) return;
-  ST.round--;
-  ST.phase = "play";
-  renderAll();
+  const active = [...ST.activeCats].sort((a, b) => b - a);
+  if (active.length > 0) ST.activeCats.delete(active[0]);
+  _afterCatChange();
 }
 
-function jumpTo(rn) {
-  ST.round = Math.min(7, Math.max(0, rn));
-  ST.phase = ST.round >= 7 ? "finished" : "play";
+function _afterCatChange() {
+  ST.phase = ST.activeCats.size >= 7 ? "finished" : "play";
   renderAll();
 }
 
@@ -924,11 +930,11 @@ function showTip(e, id) {
   const rows = document.getElementById("ct-rows");
   rows.innerHTML = "";
   CATS.forEach((cat, i) => {
-    const done = i < ST.round;
+    const on = ST.activeCats.has(i);
     const div = document.createElement("div");
     div.className = "ct-row";
-    div.innerHTML = `<span class="ct-lbl">${done?"✓":"○"} ${cat.short}</span>
-      <span class="ct-val ${done?"ct-active":"ct-done"}">${ch.s[i]} sam</span>`;
+    div.innerHTML = `<span class="ct-lbl">${on?"✓":"○"} ${cat.short}</span>
+      <span class="ct-val ${on?"ct-active":"ct-done"}">${ch.s[i]} sam</span>`;
     rows.appendChild(div);
   });
 
