@@ -167,10 +167,26 @@
     }
     .scale-end { flex-shrink: 0; } /* same width as steps label */
 
+    /* Character rows container — rows are absolutely positioned inside */
+    #char-rows {
+      position: relative;
+      /* height set by JS */
+    }
+
     /* Character row */
     .char-row {
+      position: absolute; left: 0; right: 0;
       display: flex; align-items: center;
-      height: 32px; margin-bottom: 4px;
+      height: 32px;
+      transition: top 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Rank badge */
+    .c-rank {
+      flex-shrink: 0; width: 22px;
+      font-size: 0.62rem; font-weight: 700;
+      color: var(--muted); text-align: right;
+      padding-right: 4px;
     }
 
     .char-label {
@@ -537,13 +553,25 @@ const DISCUSS_QS = [
    ============================================================ */
 
 const ST = {
-  sel:      new Set(CHARS.map(c => c.id)),
-  round:    0,
-  phase:    "setup",   // setup | play | finished
-  pqIdx:    0,
-  timerVal: 60,
-  timerTick: null,
+  sel:        new Set(CHARS.map(c => c.id)),
+  round:      0,
+  phase:      "setup",   // setup | play | finished
+  pqIdx:      0,
+  timerVal:   60,
+  timerTick:  null,
+  startOrder: [],        // random initial order (ids), used as tiebreaker
 };
+
+const ROW_H = 36; // px per row (height 32 + gap 4)
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
 /* ============================================================
    HELPERS
@@ -626,6 +654,8 @@ function selectExtremes(){ ST.sel.clear(); CHARS.slice(0,6).forEach(c=>ST.sel.ad
 function startGame() {
   ST.round = 0;
   ST.phase = "play";
+  // Store random initial order as tiebreaker for equal scores
+  ST.startOrder = shuffle(activeChars().map(c => c.id));
   document.getElementById("setup-screen").classList.add("hidden");
   document.getElementById("hdr").classList.remove("hidden");
   document.getElementById("game-wrap").classList.remove("hidden");
@@ -673,24 +703,29 @@ function buildTrack() {
     marks.appendChild(lbl);
   });
 
-  // Character rows (sorted by total desc, fixed order)
-  const rows = document.getElementById("char-rows");
-  rows.innerHTML = "";
-  const sorted = [...activeChars()].sort((a, b) => b.tot - a.tot);
+  // Character rows — in random starting order (ST.startOrder)
+  const container = document.getElementById("char-rows");
+  container.innerHTML = "";
+  const chars = activeChars();
+  container.style.height = (chars.length * ROW_H) + "px";
 
-  sorted.forEach(ch => {
+  // Create rows in random order (startOrder)
+  const ordered = ST.startOrder.map(id => chars.find(c => c.id === id)).filter(Boolean);
+
+  ordered.forEach((ch, i) => {
     const t = tier(ch.tot);
     const row = document.createElement("div");
     row.className = `char-row t-${t}`;
     row.id = `row-${ch.id}`;
+    row.style.top = (i * ROW_H) + "px";
 
-    // Gridlines at 5,10,15,20
     const glinesHTML = [5,10,15,20].map(v =>
       `<div class="gridline" style="left:${pct(v)}%"></div>`
     ).join("");
 
     row.innerHTML = `
-      <div class="char-label" style="width:${LABEL_W}px"
+      <div class="c-rank" id="rank-${ch.id}">${i+1}.</div>
+      <div class="char-label" style="width:${LABEL_W - 26}px"
            onmouseenter="showTip(event,${ch.id})" onmouseleave="hideTip()">
         <span class="c-flag"><img src="https://flagcdn.com/w40/${ch.cc}.png" alt="${ch.riik}"></span>
         <div class="c-names">
@@ -705,7 +740,7 @@ function buildTrack() {
       </div>
       <div class="c-steps" style="width:${STEPS_W}px" id="stp-${ch.id}">0</div>
     `;
-    rows.appendChild(row);
+    container.appendChild(row);
   });
 }
 
@@ -784,6 +819,24 @@ function updatePositions() {
     if (bar) bar.style.width = pctV + "%";
     if (dot) dot.style.left  = Math.max(pctV, 0.4) + "%";
     if (stp) stp.textContent = p;
+  });
+  // Animate rows to new ranking order
+  resortRows();
+}
+
+function resortRows() {
+  const chars = activeChars();
+  // Sort by current position desc; tiebreaker = original random startOrder
+  const sorted = [...chars].sort((a, b) => {
+    const pa = pos(a), pb = pos(b);
+    if (pb !== pa) return pb - pa;
+    return ST.startOrder.indexOf(a.id) - ST.startOrder.indexOf(b.id);
+  });
+  sorted.forEach((ch, i) => {
+    const row  = document.getElementById(`row-${ch.id}`);
+    const rank = document.getElementById(`rank-${ch.id}`);
+    if (row)  row.style.top = (i * ROW_H) + "px";
+    if (rank) rank.textContent = (i + 1) + ".";
   });
 }
 
